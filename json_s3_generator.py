@@ -20,7 +20,7 @@ class JSONS3Generator:
         self.bucket_name = None
         self.output_dir = "generated_json"
         self.total_files = 3000
-        self.target_total_size_gb = 50
+        self.target_total_size_gb = 4  # Changed from 50GB to 4GB
         self.max_workers = 10  # Number of parallel upload threads
         
     def setup_aws_credentials(self):
@@ -99,7 +99,7 @@ class JSONS3Generator:
             "data": {}
         }
         
-        # Calculate target size per file (50GB / 3000 files ≈ 16.7MB per file)
+        # Calculate target size per file (4GB / 3000 files ≈ 1.33MB per file)
         target_size_per_file = (self.target_total_size_gb * 1024 * 1024 * 1024) // self.total_files
         
         # Generate large chunks of data to reach target size efficiently
@@ -154,7 +154,7 @@ class JSONS3Generator:
         """Generate all JSON files locally."""
         print(f"\n📝 Generating {self.total_files} JSON files...")
         
-        # Calculate target size per file (50GB / 3000 files ≈ 16.7MB per file)
+        # Calculate target size per file (4GB / 3000 files ≈ 1.33MB per file)
         target_size_per_file = (self.target_total_size_gb * 1024 * 1024 * 1024) // self.total_files
         
         total_generated_size = 0
