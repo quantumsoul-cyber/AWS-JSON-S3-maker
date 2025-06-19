@@ -1,6 +1,6 @@
 # JSON Generator and S3 Uploader
 
-A Python application that generates 3000 unique JSON files (~4GB total) and uploads them to a new AWS S3 bucket. Perfect for testing AWS services, S3 performance simulations, and storage cost modeling.
+A Python application that generates 3000 unique encrypted JSON files (~500MB total) and uploads them to a new AWS S3 bucket. Perfect for testing AWS services, S3 performance simulations, and storage cost modeling.
 
 **Repository**: https://github.com/quantumsoul-cyber/AWS-JSON-S3-maker
 
@@ -8,8 +8,9 @@ A Python application that generates 3000 unique JSON files (~4GB total) and uplo
 
 - **Unique S3 Bucket Creation**: Creates timestamped buckets (e.g., `cursor-json-bucket-20250619-143000`)
 - **Massive JSON Generation**: Creates 3000 unique JSON files with randomized content
+- **File Encryption**: All JSON files are encrypted using Fernet (AES-256) encryption
 - **Funny Filenames**: Generates amusing, unique filenames like `fluffy-toaster-42-ab1x9z.json`
-- **Size Control**: Targets ~4GB total across all files with size variation
+- **Size Control**: Targets ~500MB total across all files with size variation
 - **Progress Tracking**: Real-time progress updates during generation and upload
 - **AWS Integration**: Seamless S3 upload with proper error handling
 - **Cleanup Options**: Optional local file cleanup after upload
@@ -18,6 +19,7 @@ A Python application that generates 3000 unique JSON files (~4GB total) and uplo
 
 - **Python 3.8+**
 - **boto3** (AWS SDK for Python)
+- **cryptography** (Fernet encryption)
 - **Standard Libraries**: `os`, `json`, `random`, `string`, `datetime`, `time`
 
 ## 🛠️ Installation
@@ -79,19 +81,20 @@ The application will:
 ✅ S3 bucket 'cursor-json-bucket-20250619-143000' created successfully
 📁 Created output directory: generated_json
 
-📝 Generating 3000 JSON files...
-📊 Progress: 100/3000 (3.3%) - 136.7 MB generated
-📊 Progress: 200/3000 (6.7%) - 273.4 MB generated
+📝 Generating 3000 encrypted JSON files...
+📊 Progress: 100/3000 (3.3%) - 17.1 MB generated
+📊 Progress: 200/3000 (6.7%) - 34.2 MB generated
 ...
-✅ Generated 3000 JSON files
-📊 Total size: 4.12 GB
+✅ Generated 3000 encrypted JSON files
+📊 Total size: 0.51 GB
+🔐 Encryption key (AES-256): [base64-encoded-key]
 
-☁️  Uploading files to S3 bucket: cursor-json-bucket-20250619-143000
-📤 Upload progress: 100/3000 (3.3%) - 136.7 MB uploaded
-📤 Upload progress: 200/3000 (6.7%) - 273.4 MB uploaded
+☁️  Uploading encrypted files to S3 bucket: cursor-json-bucket-20250619-143000
+📤 Upload progress: 100/3000 (3.3%) - 17.1 MB uploaded
+📤 Upload progress: 200/3000 (6.7%) - 34.2 MB uploaded
 ...
-✅ Successfully uploaded 3000/3000 files to S3
-📊 Total uploaded size: 4.12 GB
+✅ Successfully uploaded 3000/3000 encrypted files to S3
+📊 Total uploaded size: 0.51 GB
 
 ==================================================
 📋 FINAL SUMMARY
@@ -99,6 +102,7 @@ The application will:
 🪣 S3 Bucket: cursor-json-bucket-20250619-143000
 📁 Files generated: 3000
 📤 Files uploaded: 3000
+🔐 Encryption: Fernet (AES-256)
 ⏱️  Total time: 1245.67 seconds
 📤 Upload time: 892.34 seconds
 📊 Average upload speed: 3.36 files/second
@@ -107,6 +111,33 @@ The application will:
 🧹 Cleaned up local directory: generated_json
 
 🎉 Process completed successfully!
+```
+
+## 🔐 Encryption Features
+
+### **Fernet Encryption**
+- **Algorithm**: AES-256 in CBC mode with PKCS7 padding
+- **Key Generation**: Automatically generated unique key per run
+- **File Format**: Binary encrypted files (not readable JSON)
+- **Security**: Industry-standard encryption for data protection
+
+### **Decryption**
+To decrypt the files, you'll need the encryption key that's displayed during generation:
+
+```python
+from cryptography.fernet import Fernet
+import json
+
+# Use the key displayed during generation
+encryption_key = b'your-base64-encoded-key-here'
+cipher = Fernet(encryption_key)
+
+# Read and decrypt a file
+with open('encrypted-file.json', 'rb') as f:
+    encrypted_data = f.read()
+    
+decrypted_data = cipher.decrypt(encrypted_data)
+json_content = json.loads(decrypted_data.decode('utf-8'))
 ```
 
 ## 🧪 Ideal Use Cases
@@ -125,7 +156,7 @@ You can modify the following parameters in `json_s3_generator.py`:
 class JSONS3Generator:
     def __init__(self):
         self.total_files = 3000          # Number of files to generate
-        self.target_total_size_gb = 4    # Target total size in GB
+        self.target_total_size_gb = 0.5  # Target total size in GB (500MB)
         self.output_dir = "generated_json"  # Local output directory
 ```
 
@@ -163,10 +194,10 @@ adjectives = [
 ## 🚨 Important Notes
 
 - **AWS CLI Required**: Ensure you're logged into AWS CLI with appropriate S3 permissions
-- **Storage Requirements**: Ensure you have at least 4GB of free disk space
-- **Network Bandwidth**: Uploading 4GB requires good internet connection
+- **Storage Requirements**: Ensure you have at least 500MB of free disk space
+- **Network Bandwidth**: Uploading 500MB requires good internet connection
 - **AWS Costs**: S3 storage and API calls will incur charges based on your account
-- **Time**: The process may take 5-15 minutes depending on your setup
+- **Time**: The process may take 2-8 minutes depending on your setup
 - **Permissions**: Your AWS CLI user/role needs S3 bucket creation and upload permissions
 
 ## 📝 License

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 JSON Generator and S3 Uploader
-Creates 3000 unique JSON files (~50GB total) and uploads them to a new S3 bucket.
+Creates 3000 unique JSON files (~4GB total) and uploads them to a new S3 bucket.
 """
 
 import os
@@ -10,7 +10,8 @@ import random
 import string
 import time
 import boto3
-import concurrent.futures
+import base64
+from cryptography.fernet import Fernet
 from datetime import datetime
 from botocore.exceptions import ClientError, NoCredentialsError
 
@@ -20,8 +21,10 @@ class JSONS3Generator:
         self.bucket_name = None
         self.output_dir = "generated_json"
         self.total_files = 3000
-        self.target_total_size_gb = 4  # Changed from 50GB to 4GB
-        self.max_workers = 10  # Number of parallel upload threads
+        self.target_total_size_gb = 0.5  # Changed to 500MB (0.5GB)
+        # Generate encryption key
+        self.encryption_key = Fernet.generate_key()
+        self.cipher = Fernet(self.encryption_key)
         
     def setup_aws_credentials(self):
         """Setup AWS credentials and S3 client using CLI user role."""
@@ -88,7 +91,7 @@ class JSONS3Generator:
         return f"{adj}-{noun}-{number}-{suffix}.json"
     
     def generate_random_json_content(self, target_size_bytes):
-        """Generate random JSON content with target size - FIXED VERSION."""
+        """Generate random JSON content with target size."""
         # Base structure
         data = {
             "metadata": {
@@ -99,50 +102,48 @@ class JSONS3Generator:
             "data": {}
         }
         
-        # Calculate target size per file (4GB / 3000 files ≈ 1.33MB per file)
-        target_size_per_file = (self.target_total_size_gb * 1024 * 1024 * 1024) // self.total_files
+        # Calculate how much content we need to add
+        current_size = len(json.dumps(data))
+        remaining_bytes = target_size_bytes - current_size
         
-        # Generate large chunks of data to reach target size efficiently
-        chunk_size = 10000  # Generate 10KB chunks at a time
+        if remaining_bytes <= 0:
+            return data
+        
+        # Generate random key-value pairs to reach target size
         keys_generated = 0
-        
-        while len(json.dumps(data)) < target_size_bytes:
-            # Generate a chunk of data
-            for chunk_idx in range(chunk_size):
-                key = f"field_{keys_generated}_{''.join(random.choices(string.ascii_lowercase, k=8))}"
-                
-                # Generate larger data to reach target size faster
-                data_type = random.choice(['string', 'number', 'array', 'object', 'boolean'])
-                
-                if data_type == 'string':
-                    # Generate much larger strings
-                    str_length = random.randint(100, 2000)
-                    value = ''.join(random.choices(string.ascii_letters + string.digits + ' ', k=str_length))
-                elif data_type == 'number':
-                    value = random.uniform(-1000000, 1000000)
-                elif data_type == 'array':
-                    # Generate larger arrays
-                    array_length = random.randint(50, 200)
-                    value = [random.randint(1, 1000) for _ in range(array_length)]
-                elif data_type == 'object':
-                    # Generate larger objects
-                    obj_length = random.randint(10, 50)
-                    value = {f"nested_{i}": random.randint(1, 100) for i in range(obj_length)}
-                else:  # boolean
-                    value = random.choice([True, False])
-                
-                data["data"][key] = value
-                keys_generated += 1
-                
-                # Check if we've reached target size
-                if len(json.dumps(data)) >= target_size_bytes:
-                    break
+        while len(json.dumps(data)) < target_size_bytes and keys_generated < 1000:
+            key = f"field_{keys_generated}_{''.join(random.choices(string.ascii_lowercase, k=8))}"
             
-            # Safety check to prevent infinite loops
-            if keys_generated > 100000:  # Max 100k keys per file
-                break
+            # Randomly choose data type
+            data_type = random.choice(['string', 'number', 'array', 'object', 'boolean'])
+            
+            if data_type == 'string':
+                # Generate random string
+                str_length = random.randint(10, 500)
+                value = ''.join(random.choices(string.ascii_letters + string.digits + ' ', k=str_length))
+            elif data_type == 'number':
+                value = random.uniform(-1000000, 1000000)
+            elif data_type == 'array':
+                array_length = random.randint(1, 50)
+                value = [random.randint(1, 1000) for _ in range(array_length)]
+            elif data_type == 'object':
+                obj_length = random.randint(1, 10)
+                value = {f"nested_{i}": random.randint(1, 100) for i in range(obj_length)}
+            else:  # boolean
+                value = random.choice([True, False])
+            
+            data["data"][key] = value
+            keys_generated += 1
         
         return data
+    
+    def encrypt_json_content(self, json_content):
+        """Encrypt JSON content using Fernet encryption."""
+        # Convert JSON to string
+        json_string = json.dumps(json_content, indent=2)
+        # Encrypt the JSON string
+        encrypted_data = self.cipher.encrypt(json_string.encode('utf-8'))
+        return encrypted_data
     
     def create_output_directory(self):
         """Create the output directory for JSON files."""
@@ -152,9 +153,9 @@ class JSONS3Generator:
     
     def generate_json_files(self):
         """Generate all JSON files locally."""
-        print(f"\n📝 Generating {self.total_files} JSON files...")
+        print(f"\n📝 Generating {self.total_files} encrypted JSON files...")
         
-        # Calculate target size per file (4GB / 3000 files ≈ 1.33MB per file)
+        # Calculate target size per file (500MB / 3000 files ≈ 167KB per file)
         target_size_per_file = (self.target_total_size_gb * 1024 * 1024 * 1024) // self.total_files
         
         total_generated_size = 0
@@ -172,9 +173,12 @@ class JSONS3Generator:
             # Generate JSON content
             json_content = self.generate_random_json_content(target_size)
             
-            # Write to file
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(json_content, f, indent=2)
+            # Encrypt the JSON content
+            encrypted_content = self.encrypt_json_content(json_content)
+            
+            # Write encrypted content to file
+            with open(filepath, 'wb') as f:
+                f.write(encrypted_content)
             
             # Get actual file size
             actual_size = os.path.getsize(filepath)
@@ -192,61 +196,41 @@ class JSONS3Generator:
                 size_mb = total_generated_size / (1024 * 1024)
                 print(f"📊 Progress: {i + 1}/{self.total_files} ({progress:.1f}%) - {size_mb:.1f} MB generated")
         
-        print(f"✅ Generated {len(files_created)} JSON files")
+        print(f"✅ Generated {len(files_created)} encrypted JSON files")
         print(f"📊 Total size: {total_generated_size / (1024 * 1024 * 1024):.2f} GB")
+        print(f"🔐 Encryption key (AES-256): {base64.b64encode(self.encryption_key).decode('utf-8')}")
         
         return files_created
     
-    def upload_single_file(self, file_info):
-        """Upload a single file to S3 - used for parallel processing."""
-        try:
-            self.s3_client.upload_file(
-                file_info['filepath'],
-                self.bucket_name,
-                file_info['filename']
-            )
-            return True, file_info['size']
-        except ClientError as e:
-            print(f"❌ Error uploading {file_info['filename']}: {e}")
-            return False, 0
-    
     def upload_to_s3(self, files_created):
-        """Upload all generated files to S3 using parallel processing."""
-        print(f"\n☁️  Uploading files to S3 bucket: {self.bucket_name}")
-        print(f"🚀 Using {self.max_workers} parallel upload threads for speed")
+        """Upload all generated files to S3."""
+        print(f"\n☁️  Uploading encrypted files to S3 bucket: {self.bucket_name}")
         
         total_uploaded = 0
         total_upload_size = 0
-        completed_files = 0
         
-        # Use ThreadPoolExecutor for parallel uploads
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # Submit all upload tasks
-            future_to_file = {executor.submit(self.upload_single_file, file_info): file_info 
-                            for file_info in files_created}
-            
-            # Process completed uploads
-            for future in concurrent.futures.as_completed(future_to_file):
-                file_info = future_to_file[future]
-                try:
-                    success, file_size = future.result()
-                    if success:
-                        total_uploaded += 1
-                        total_upload_size += file_size
-                    
-                    completed_files += 1
-                    
-                    # Progress update every 100 files
-                    if completed_files % 100 == 0:
-                        progress = (completed_files / len(files_created)) * 100
-                        size_mb = total_upload_size / (1024 * 1024)
-                        print(f"📤 Upload progress: {completed_files}/{len(files_created)} ({progress:.1f}%) - {size_mb:.1f} MB uploaded")
+        for i, file_info in enumerate(files_created):
+            try:
+                # Upload file to S3
+                self.s3_client.upload_file(
+                    file_info['filepath'],
+                    self.bucket_name,
+                    file_info['filename']
+                )
                 
-                except Exception as e:
-                    print(f"❌ Exception uploading {file_info['filename']}: {e}")
-                    completed_files += 1
+                total_uploaded += 1
+                total_upload_size += file_info['size']
+                
+                # Progress update every 100 files
+                if (i + 1) % 100 == 0:
+                    progress = ((i + 1) / len(files_created)) * 100
+                    size_mb = total_upload_size / (1024 * 1024)
+                    print(f"📤 Upload progress: {i + 1}/{len(files_created)} ({progress:.1f}%) - {size_mb:.1f} MB uploaded")
+                
+            except ClientError as e:
+                print(f"❌ Error uploading {file_info['filename']}: {e}")
         
-        print(f"✅ Successfully uploaded {total_uploaded}/{len(files_created)} files to S3")
+        print(f"✅ Successfully uploaded {total_uploaded}/{len(files_created)} encrypted files to S3")
         print(f"📊 Total uploaded size: {total_upload_size / (1024 * 1024 * 1024):.2f} GB")
         
         return total_uploaded
@@ -262,7 +246,7 @@ class JSONS3Generator:
     
     def run(self):
         """Main execution method."""
-        print("🚀 JSON Generator and S3 Uploader (Optimized)")
+        print("🚀 JSON Generator and S3 Uploader (Encrypted)")
         print("=" * 50)
         
         # Setup AWS
@@ -297,10 +281,10 @@ class JSONS3Generator:
         print(f"🪣 S3 Bucket: {self.bucket_name}")
         print(f"📁 Files generated: {len(files_created)}")
         print(f"📤 Files uploaded: {uploaded_count}")
+        print(f"🔐 Encryption: Fernet (AES-256)")
         print(f"⏱️  Total time: {total_time:.2f} seconds")
         print(f"📤 Upload time: {upload_time:.2f} seconds")
         print(f"📊 Average upload speed: {len(files_created) / upload_time:.2f} files/second")
-        print(f"🚀 Parallel uploads: {self.max_workers} threads")
         
         # Ask about cleanup
         cleanup = input("\n🧹 Clean up local JSON files? (y/n): ").lower().strip()
