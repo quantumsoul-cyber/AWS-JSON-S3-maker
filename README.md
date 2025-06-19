@@ -2,6 +2,8 @@
 
 A Python application that generates 3000 unique JSON files (~50GB total) and uploads them to a new AWS S3 bucket. Perfect for testing AWS services, S3 performance simulations, and storage cost modeling.
 
+**Repository**: https://github.com/quantumsoul-cyber/AWS-JSON-S3-maker
+
 ## 🚀 Features
 
 - **Unique S3 Bucket Creation**: Creates timestamped buckets (e.g., `cursor-json-bucket-20250619-143000`)
@@ -22,8 +24,8 @@ A Python application that generates 3000 unique JSON files (~50GB total) and upl
 
 1. **Clone the repository**:
    ```bash
-   git clone <your-repo-url>
-   cd aws-json-s3-maker
+   git clone https://github.com/quantumsoul-cyber/AWS-JSON-S3-maker
+   cd AWS-JSON-S3-maker
    ```
 
 2. **Install dependencies**:
@@ -181,7 +183,8 @@ This project is open source and available under the [MIT License](LICENSE).
 
 ## 📞 Support
 
-If you encounter any issues or have questions, please open an issue on GitHub.
+If you encounter any issues or have questions, please open an issue on GitHub:
+https://github.com/quantumsoul-cyber/AWS-JSON-S3-maker/issues
 
 ---
 
